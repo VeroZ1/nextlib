@@ -10,7 +10,7 @@ cmake_minimum_required(VERSION 3.22.1)
 project("media3ext")
 
 set(ffmpeg_dir ${CMAKE_SOURCE_DIR}/../../../../ffmpeg/output)
-set(ffmpeg_libs ${ffmpeg_dir}/lib/${ANDROID_ABI})
+set(ffmpeg_libs ${ffmpeg_dir}/${ANDROID_ABI}/lib)
 
 include_directories(${ffmpeg_dir}/include/${ANDROID_ABI})
 
@@ -23,13 +23,13 @@ set(
 foreach (ffmpeg_lib_name ${ffmpeg_libs_names})
     add_library(
             ${ffmpeg_lib_name}
-            SHARED
+            STATIC
             IMPORTED)
     set_target_properties(
             ${ffmpeg_lib_name}
             PROPERTIES
             IMPORTED_LOCATION
-            ${ffmpeg_libs}/lib${ffmpeg_lib_name}.so)
+            ${ffmpeg_libs}/lib${ffmpeg_lib_name}.a)
 endforeach ()
 
 add_library(${CMAKE_PROJECT_NAME} SHARED

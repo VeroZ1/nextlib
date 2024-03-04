@@ -17,7 +17,7 @@ MBEDTLS_DIR=$SOURCES_DIR/mbedtls-$MBEDTLS_VERSION
 # Configuration
 ANDROID_ABIS="x86 x86_64 armeabi-v7a arm64-v8a"
 ANDROID_PLATFORM=21
-ENABLED_DECODERS="vorbis opus flac alac pcm_mulaw pcm_alaw mp3 amrnb amrwb aac ac3 eac3 dca mlp truehd h264 hevc mpeg2video mpegvideo libvpx_vp8 libvpx_vp9"
+ENABLED_DECODERS="vorbis opus flac alac pcm_mulaw pcm_alaw mp3 amrnb amrwb aac ac3 eac3 dca mlp truehd h264 hevc mpeg2video mpegvideo vp8 vp9"
 JOBS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || sysctl -n hw.pysicalcpu || echo 4)
 
 # Set up host platform variables
@@ -220,8 +220,8 @@ function buildFfmpeg() {
       --extra-ldflags="$DEP_LD_FLAGS" \
       --pkg-config="$(which pkg-config)" \
       --target-os=android \
-      --enable-shared \
-      --disable-static \
+      --disable-shared \
+      --enable-static \
       --disable-doc \
       --disable-programs \
       --disable-everything \
@@ -235,7 +235,7 @@ function buildFfmpeg() {
       --enable-demuxers \
       --enable-swresample \
       --enable-avformat \
-      --enable-libvpx \
+      --disable-libvpx \
       --enable-protocol=file,http,https,mmsh,mmst,pipe,rtmp,rtmps,rtmpt,rtmpts,rtp,tls \
       --enable-version3 \
       --enable-mbedtls \
@@ -250,9 +250,9 @@ function buildFfmpeg() {
     make -j$JOBS
     make install
 
-    OUTPUT_LIB=${OUTPUT_DIR}/lib/${ABI}
+    OUTPUT_LIB=${OUTPUT_DIR}/${ABI}/lib
     mkdir -p "${OUTPUT_LIB}"
-    cp "${BUILD_DIR}"/"${ABI}"/lib/*.so "${OUTPUT_LIB}"
+    cp "${BUILD_DIR}"/"${ABI}"/lib/*.a "${OUTPUT_LIB}"
 
     OUTPUT_HEADERS=${OUTPUT_DIR}/include/${ABI}
     mkdir -p "${OUTPUT_HEADERS}"
