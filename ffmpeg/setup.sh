@@ -97,11 +97,11 @@ function buildLibVpx() {
     # Set up environment variables
     case $ABI in
     armeabi-v7a)
-      EXTRA_BUILD_FLAGS="--force-target=armv7-android-gcc --disable-neon"
+      EXTRA_BUILD_FLAGS="--force-target=armv7-android-gcc --disable-neon --enable-pic"
       TOOLCHAIN=armv7a-linux-androideabi21-
       ;;
     arm64-v8a)
-      EXTRA_BUILD_FLAGS="--force-target=armv8-android-gcc"
+      EXTRA_BUILD_FLAGS="--force-target=armv8-android-gcc --enable-pic"
       TOOLCHAIN=aarch64-linux-android21-
       ;;
     x86)
@@ -170,6 +170,8 @@ function buildMbedTLS() {
        -DCMAKE_INSTALL_PREFIX=$BUILD_DIR/external/$ABI \
        -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-z,max-page-size=16384" \
        -DENABLE_TESTING=0
+       -DMBEDTLS_X509_CRT_PARSE_C=ON \
+       -DMBEDTLS_X509_USE_C=ON
 
       make -j$JOBS
       make install
@@ -239,8 +241,8 @@ function buildFfmpeg() {
       --extra-ldflags="$DEP_LD_FLAGS -Wl,-z,max-page-size=16384" \
       --pkg-config="$(which pkg-config)" \
       --target-os=android \
-      --enable-shared \
-      --disable-static \
+      --disable-shared \
+      --enable-static \
       --disable-doc \
       --disable-programs \
       --disable-everything \
@@ -258,6 +260,7 @@ function buildFfmpeg() {
       --enable-protocol=file,http,https,mmsh,mmst,pipe,rtmp,rtmps,rtmpt,rtmpts,rtp,tls \
       --enable-version3 \
       --enable-mbedtls \
+      --enable-zlib \
       --extra-ldexeflags=-pie \
       --disable-debug \
       ${EXTRA_BUILD_CONFIGURATION_FLAGS} \
@@ -271,7 +274,8 @@ function buildFfmpeg() {
 
     OUTPUT_LIB=${OUTPUT_DIR}/lib/${ABI}
     mkdir -p "${OUTPUT_LIB}"
-    cp "${BUILD_DIR}"/"${ABI}"/lib/*.so "${OUTPUT_LIB}"
+    cp "${BUILD_DIR}"/"${ABI}"/lib/*.a "${OUTPUT_LIB}"
+    cp ${BUILD_DIR}/external/${ABI}/lib/*.a ${OUTPUT_LIB}
 
     OUTPUT_HEADERS=${OUTPUT_DIR}/include/${ABI}
     mkdir -p "${OUTPUT_HEADERS}"

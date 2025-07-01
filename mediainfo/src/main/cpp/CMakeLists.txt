@@ -16,7 +16,7 @@ set(
         # List variable name
         ffmpeg_libs_names
         # Values in the list
-        avcodec avformat avutil swscale)
+        avcodec avformat avutil swscale swresample mbedtls mbedx509 mbedcrypto vpx)
 
 foreach (ffmpeg_lib_name ${ffmpeg_libs_names})
     add_library(
@@ -27,7 +27,7 @@ foreach (ffmpeg_lib_name ${ffmpeg_libs_names})
             ${ffmpeg_lib_name}
             PROPERTIES
             IMPORTED_LOCATION
-            ${ffmpeg_libs}/lib${ffmpeg_lib_name}.so)
+            ${ffmpeg_libs}/lib${ffmpeg_lib_name}.a)
 endforeach ()
 
 
@@ -48,4 +48,5 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
         # List libraries link to the target library
         log
         jnigraphics
+        z
         ${ffmpeg_libs_names})
