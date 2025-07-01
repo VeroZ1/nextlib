@@ -7,7 +7,7 @@ import android.util.Log
 import androidx.annotation.Keep
 import java.io.FileNotFoundException
 
-class MediaInfoBuilder(private val context: Context) {
+class MediaInfoBuilder {
 
     private var hasError: Boolean = false
 
@@ -15,8 +15,9 @@ class MediaInfoBuilder(private val context: Context) {
     private var duration: Long? = null
     private var frameLoaderContextHandle: Long? = null
     private var videoStream: VideoStream? = null
-    private var audioStreams = mutableListOf<AudioStream>()
-    private var subtitleStreams = mutableListOf<SubtitleStream>()
+    private val audioStreams = mutableListOf<AudioStream>()
+    private val subtitleStreams = mutableListOf<SubtitleStream>()
+    private val chapters = mutableListOf<Chapter>()
 
 
     fun from(filePath: String) = apply {
@@ -27,7 +28,7 @@ class MediaInfoBuilder(private val context: Context) {
         nativeCreateFromFD(descriptor.fd)
     }
 
-    fun from(uri: Uri) = apply {
+    fun from(context: Context, uri: Uri) = apply {
         when {
             uri.scheme?.lowercase()?.startsWith("http") == true -> from(uri.toString())
             else -> {
@@ -56,6 +57,7 @@ class MediaInfoBuilder(private val context: Context) {
                 videoStream,
                 audioStreams,
                 subtitleStreams,
+                chapters,
                 frameLoaderContextHandle
             )
         } else null
@@ -96,6 +98,7 @@ class MediaInfoBuilder(private val context: Context) {
         frameRate: Double,
         frameWidth: Int,
         frameHeight: Int,
+        rotation: Int,
         frameLoaderContext: Long
     ) {
         if (videoStream == null) {
@@ -108,7 +111,8 @@ class MediaInfoBuilder(private val context: Context) {
                 bitRate = bitRate,
                 frameRate = frameRate,
                 frameWidth = frameWidth,
-                frameHeight = frameHeight
+                frameHeight = frameHeight,
+                rotation = rotation
             )
             if (frameLoaderContext != -1L) {
                 frameLoaderContextHandle = frameLoaderContext
@@ -164,6 +168,25 @@ class MediaInfoBuilder(private val context: Context) {
                 codecName = codecName,
                 language = language,
                 disposition = disposition
+            )
+        )
+    }
+
+    /* Used from JNI */
+    @Keep
+    @SuppressWarnings("UnusedPrivateMember")
+    private fun onChapterFound(
+        index: Int,
+        title: String?,
+        start: Long,
+        end: Long,
+    ) {
+        chapters.add(
+            Chapter(
+                index = index,
+                start = start,
+                end = end,
+                title = title,
             )
         )
     }

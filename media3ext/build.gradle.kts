@@ -3,13 +3,13 @@ import com.android.build.gradle.internal.tasks.factory.dependsOn
 plugins {
     alias(libs.plugins.androidLibrary)
     alias(libs.plugins.kotlinAndroid)
-    id("maven-publish")
+    alias(libs.plugins.mavenPublish)
 }
 
 android {
     namespace = "io.github.anilbeesetti.nextlib.media3ext"
-
-    compileSdk = 34
+    compileSdk = libs.versions.androidCompileSdk.get().toInt()
+    ndkVersion = libs.versions.ndk.get()
 
     defaultConfig {
 
@@ -24,8 +24,6 @@ android {
         ndk {
             abiFilters += listOf("x86", "x86_64", "armeabi-v7a", "arm64-v8a")
         }
-
-        ndkVersion = "25.2.9519653"
     }
 
     compileOptions {
@@ -41,7 +39,7 @@ android {
     externalNativeBuild {
         cmake {
             path("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
+            version = libs.versions.cmake.get()
         }
     }
 }
@@ -52,6 +50,7 @@ val ffmpegSetup by tasks.registering(Exec::class) {
     // export ndk path and run bash script
     environment("ANDROID_SDK_HOME", android.sdkDirectory.absolutePath)
     environment("ANDROID_NDK_HOME", android.ndkDirectory.absolutePath)
+    environment("ANDROID_CMAKE_VERSION", libs.versions.cmake.get())
     commandLine("bash", "setup.sh")
 }
 
@@ -63,18 +62,4 @@ dependencies {
     implementation(libs.androidx.annotation)
     compileOnly(libs.checker.qual)
     compileOnly(libs.kotlin.annotations.jvm)
-}
-
-afterEvaluate {
-    publishing {
-        publications {
-            create<MavenPublication>("mavenJava") {
-                groupId = "io.github.anilbeesetti"
-                artifactId = "nextlib-media3ext"
-                version = "1.0"
-
-                from(components["release"])
-            }
-        }
-    }
 }

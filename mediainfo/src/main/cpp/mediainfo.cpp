@@ -5,8 +5,9 @@
 #include "frame_loader_context.h"
 
 extern "C" {
-#include "libavformat/avformat.h"
-#include "libavcodec/codec_desc.h"
+#include <libavformat/avformat.h>
+#include <libavcodec/codec_desc.h>
+#include <libavutil/display.h>
 }
 
 static char *get_string(AVDictionary *metadata, const char *key) {
@@ -33,16 +34,18 @@ static void onError(JNIEnv *env, jobject jMediaInfoBuilder) {
 void onMediaInfoFound(JNIEnv *env, jobject jMediaInfoBuilder, AVFormatContext *avFormatContext) {
     const char *fileFormatName = avFormatContext->iformat->long_name;
 
+    long duration_ms = (long) (avFormatContext->duration * av_q2d(AV_TIME_BASE_Q) * 1000.0);
     jstring jFileFormatName = env->NewStringUTF(fileFormatName);
 
     utils_call_instance_method_void(env,
                                     jMediaInfoBuilder,
                                     fields.MediaInfoBuilder.onMediaInfoFoundID,
                                     jFileFormatName,
-                                    avFormatContext->duration);
+                                    duration_ms);
 }
 
-void onVideoStreamFound(JNIEnv *env, jobject jMediaInfoBuilder, AVFormatContext *avFormatContext, int index) {
+void onVideoStreamFound(JNIEnv *env, jobject jMediaInfoBuilder, AVFormatContext *avFormatContext,
+                        int index) {
     AVStream *stream = avFormatContext->streams[index];
     AVCodecParameters *parameters = stream->codecpar;
 
@@ -60,13 +63,37 @@ void onVideoStreamFound(JNIEnv *env, jobject jMediaInfoBuilder, AVFormatContext 
     }
 
 
-    AVRational guessedFrameRate = av_guess_frame_rate(avFormatContext, avFormatContext->streams[index], nullptr);
+    AVRational guessedFrameRate = av_guess_frame_rate(avFormatContext,
+                                                      avFormatContext->streams[index],
+                                                      nullptr);
 
-    double resultFrameRate = guessedFrameRate.den == 0 ? 0.0 : guessedFrameRate.num / (double) guessedFrameRate.den;
+    double resultFrameRate =
+            guessedFrameRate.den == 0 ? 0.0 : guessedFrameRate.num / (double) guessedFrameRate.den;
 
     jstring jTitle = env->NewStringUTF(get_title(stream->metadata));
-    jstring jCodecName = env->NewStringUTF(codecDescriptor->long_name);
+    jstring jCodecName;
+    if (codecDescriptor != nullptr) {
+        jCodecName = env->NewStringUTF(codecDescriptor->long_name);
+    } else {
+        jCodecName = env->NewStringUTF("Unknown Codec");
+    }
     jstring jLanguage = env->NewStringUTF(get_language(stream->metadata));
+
+    int rotation = 0;
+    AVDictionaryEntry *rotateTag = av_dict_get(stream->metadata, "rotate", nullptr, 0);
+    if (rotateTag && *rotateTag->value) {
+        rotation = atoi(rotateTag->value);
+        rotation %= 360;
+        if (rotation < 0) rotation += 360;
+    }
+    uint8_t *displaymatrix = av_stream_get_side_data(stream,
+                                                     AV_PKT_DATA_DISPLAYMATRIX,
+                                                     nullptr);
+    if (displaymatrix) {
+        double theta = av_display_rotation_get((int32_t *) displaymatrix);
+        rotation = (int) (-theta) % 360;
+        if (rotation < 0) rotation += 360;
+    }
 
     utils_call_instance_method_void(env,
                                     jMediaInfoBuilder,
@@ -80,10 +107,12 @@ void onVideoStreamFound(JNIEnv *env, jobject jMediaInfoBuilder, AVFormatContext 
                                     resultFrameRate,
                                     parameters->width,
                                     parameters->height,
+                                    rotation,
                                     frameLoaderContextHandle);
 }
 
-void onAudioStreamFound(JNIEnv *env, jobject jMediaInfoBuilder, AVFormatContext *avFormatContext, int index) {
+void onAudioStreamFound(JNIEnv *env, jobject jMediaInfoBuilder, AVFormatContext *avFormatContext,
+                        int index) {
     AVStream *stream = avFormatContext->streams[index];
     AVCodecParameters *parameters = stream->codecpar;
 
@@ -92,10 +121,16 @@ void onAudioStreamFound(JNIEnv *env, jobject jMediaInfoBuilder, AVFormatContext 
     auto avSampleFormat = static_cast<AVSampleFormat>(parameters->format);
     auto jSampleFormat = env->NewStringUTF(av_get_sample_fmt_name(avSampleFormat));
     char chLayoutDescription[128];
-    av_channel_layout_describe(&parameters->ch_layout, chLayoutDescription, sizeof(chLayoutDescription));
+    av_channel_layout_describe(&parameters->ch_layout, chLayoutDescription,
+                               sizeof(chLayoutDescription));
 
     jstring jTitle = env->NewStringUTF(get_title(stream->metadata));
-    jstring jCodecName = env->NewStringUTF(codecDescriptor->long_name);
+    jstring jCodecName;
+    if (codecDescriptor != nullptr) {
+        jCodecName = env->NewStringUTF(codecDescriptor->long_name);
+    } else {
+        jCodecName = env->NewStringUTF("Unknown Codec");
+    }
     jstring jLanguage = env->NewStringUTF(get_language(stream->metadata));
     jstring jChannelLayout = env->NewStringUTF(chLayoutDescription);
 
@@ -114,14 +149,20 @@ void onAudioStreamFound(JNIEnv *env, jobject jMediaInfoBuilder, AVFormatContext 
                                     jChannelLayout);
 }
 
-void onSubtitleStreamFound(JNIEnv *env, jobject jMediaInfoBuilder, AVFormatContext *avFormatContext, int index) {
+void onSubtitleStreamFound(JNIEnv *env, jobject jMediaInfoBuilder, AVFormatContext *avFormatContext,
+                           int index) {
     AVStream *stream = avFormatContext->streams[index];
     AVCodecParameters *parameters = stream->codecpar;
 
     auto codecDescriptor = avcodec_descriptor_get(parameters->codec_id);
 
     jstring jTitle = env->NewStringUTF(get_title(stream->metadata));
-    jstring jCodecName = env->NewStringUTF(codecDescriptor->long_name);
+    jstring jCodecName;
+    if (codecDescriptor != nullptr) {
+        jCodecName = env->NewStringUTF(codecDescriptor->long_name);
+    } else {
+        jCodecName = env->NewStringUTF("Unknown Codec");
+    }
     jstring jLanguage = env->NewStringUTF(get_language(stream->metadata));
 
     utils_call_instance_method_void(env,
@@ -132,6 +173,24 @@ void onSubtitleStreamFound(JNIEnv *env, jobject jMediaInfoBuilder, AVFormatConte
                                     jCodecName,
                                     jLanguage,
                                     stream->disposition);
+}
+
+void onChapterFound(JNIEnv *env, jobject jMediaInfoBuilder, AVFormatContext *avFormatContext,
+                    int index) {
+    AVChapter *chapter = avFormatContext->chapters[index];
+
+    jstring jTitle = env->NewStringUTF(get_title(chapter->metadata));
+    double time_base = av_q2d(chapter->time_base);
+    long start_ms = (long) (chapter->start * time_base * 1000.0);
+    long end_ms = (long) (chapter->end * time_base * 1000.0);
+
+    utils_call_instance_method_void(env,
+                                    jMediaInfoBuilder,
+                                    fields.MediaInfoBuilder.onChapterFoundID,
+                                    index,
+                                    jTitle,
+                                    start_ms,
+                                    end_ms);
 }
 
 void media_info_build(JNIEnv *env, jobject jMediaInfoBuilder, const char *uri) {
@@ -156,7 +215,7 @@ void media_info_build(JNIEnv *env, jobject jMediaInfoBuilder, const char *uri) {
         AVMediaType type = parameters->codec_type;
         switch (type) {
             case AVMEDIA_TYPE_VIDEO:
-                 onVideoStreamFound(env, jMediaInfoBuilder, avFormatContext, pos);
+                onVideoStreamFound(env, jMediaInfoBuilder, avFormatContext, pos);
                 break;
             case AVMEDIA_TYPE_AUDIO:
                 onAudioStreamFound(env, jMediaInfoBuilder, avFormatContext, pos);
@@ -166,11 +225,17 @@ void media_info_build(JNIEnv *env, jobject jMediaInfoBuilder, const char *uri) {
                 break;
         }
     }
+
+    for (int pos = 0; pos < avFormatContext->nb_chapters; pos++) {
+        onChapterFound(env, jMediaInfoBuilder, avFormatContext, pos);
+    }
 }
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_io_github_anilbeesetti_nextlib_mediainfo_MediaInfoBuilder_nativeCreateFromFD(JNIEnv *env, jobject thiz, jint file_descriptor) {
+Java_io_github_anilbeesetti_nextlib_mediainfo_MediaInfoBuilder_nativeCreateFromFD(JNIEnv *env,
+                                                                                  jobject thiz,
+                                                                                  jint file_descriptor) {
     char pipe[32];
     sprintf(pipe, "pipe:%d", file_descriptor);
 
@@ -179,7 +244,9 @@ Java_io_github_anilbeesetti_nextlib_mediainfo_MediaInfoBuilder_nativeCreateFromF
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_io_github_anilbeesetti_nextlib_mediainfo_MediaInfoBuilder_nativeCreateFromPath(JNIEnv *env, jobject thiz, jstring jFilePath) {
+Java_io_github_anilbeesetti_nextlib_mediainfo_MediaInfoBuilder_nativeCreateFromPath(JNIEnv *env,
+                                                                                    jobject thiz,
+                                                                                    jstring jFilePath) {
     const char *cFilePath = env->GetStringUTFChars(jFilePath, nullptr);
 
     media_info_build(env, thiz, cFilePath);

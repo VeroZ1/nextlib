@@ -35,7 +35,24 @@ esac
 
 # Build tools
 TOOLCHAIN_PREFIX="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/${HOST_PLATFORM}"
-CMAKE_EXECUTABLE=${ANDROID_SDK_HOME}/cmake/3.22.1/bin/cmake
+CMAKE_EXECUTABLE="${ANDROID_SDK_HOME}/cmake/${ANDROID_CMAKE_VERSION}/bin/cmake"
+
+# Check if sdkmanager is in PATH
+if command -v sdkmanager &> /dev/null; then
+  # Use sdkmanager from PATH
+  echo "Using sdkmanager from PATH"
+  echo y | sdkmanager --sdk_root="${ANDROID_SDK_HOME}" "cmake;${ANDROID_CMAKE_VERSION}"
+else
+  # Use sdkmanager from Android SDK
+  SDKMANAGER_EXECUTABLE="${ANDROID_SDK_HOME}/cmdline-tools/latest/bin/sdkmanager"
+  if [[ -x "$SDKMANAGER_EXECUTABLE" ]]; then
+    echo "Using sdkmanager from Android SDK"
+    echo y | "$SDKMANAGER_EXECUTABLE" --sdk_root="${ANDROID_SDK_HOME}" "cmake;${ANDROID_CMAKE_VERSION}"
+  else
+    echo "Error: sdkmanager not found in PATH or Android SDK"
+    exit 1
+  fi
+fi
 
 mkdir -p $SOURCES_DIR
 
@@ -110,6 +127,7 @@ function buildLibVpx() {
       AS=${VPX_AS} \
       STRIP=${TOOLCHAIN_PREFIX}/bin/llvm-strip \
       NM=${TOOLCHAIN_PREFIX}/bin/llvm-nm \
+      LDFLAGS="-Wl,-z,max-page-size=16384" \
       ./configure \
       --prefix=$BUILD_DIR/external/$ABI \
       --libc="${TOOLCHAIN_PREFIX}/sysroot" \
@@ -150,6 +168,7 @@ function buildMbedTLS() {
        -DANDROID_ABI=$ABI \
        -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
        -DCMAKE_INSTALL_PREFIX=$BUILD_DIR/external/$ABI \
+       -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-z,max-page-size=16384" \
        -DENABLE_TESTING=0
 
       make -j$JOBS
@@ -217,7 +236,7 @@ function buildFfmpeg() {
       --ranlib="${TOOLCHAIN_PREFIX}/bin/llvm-ranlib" \
       --strip="${TOOLCHAIN_PREFIX}/bin/llvm-strip" \
       --extra-cflags="-O3 -fPIC $DEP_CFLAGS" \
-      --extra-ldflags="$DEP_LD_FLAGS" \
+      --extra-ldflags="$DEP_LD_FLAGS -Wl,-z,max-page-size=16384" \
       --pkg-config="$(which pkg-config)" \
       --target-os=android \
       --disable-shared \

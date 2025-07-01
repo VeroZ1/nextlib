@@ -61,7 +61,7 @@ int utils_fields_init(JavaVM *vm) {
     GET_ID(GetMethodID,
            fields.MediaInfoBuilder.onVideoStreamFoundID,
            fields.MediaInfoBuilder.clazz,
-           "onVideoStreamFound", "(ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;IJDIIJ)V"
+           "onVideoStreamFound", "(ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;IJDIIIJ)V"
     );
 
     GET_ID(GetMethodID,
@@ -75,6 +75,12 @@ int utils_fields_init(JavaVM *vm) {
            fields.MediaInfoBuilder.onSubtitleStreamFoundID,
            fields.MediaInfoBuilder.clazz,
            "onSubtitleStreamFound", "(ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;I)V"
+    );
+
+    GET_ID(GetMethodID,
+           fields.MediaInfoBuilder.onChapterFoundID,
+           fields.MediaInfoBuilder.clazz,
+           "onChapterFound", "(ILjava/lang/String;JJ)V"
     );
 
     return 0;
